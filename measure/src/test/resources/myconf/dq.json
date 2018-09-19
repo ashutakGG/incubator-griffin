@@ -1,0 +1,29 @@
+{
+  "name": "my_profiling_measure",
+  "process.type": "batch",
+  "data.sources": [],
+  "evaluate.rule": {
+    "rules": [
+      {
+        "dsl.type": "spark-sql",
+        "dq.type": "profiling",
+        "out.dataframe.name": "spark_sql_test",
+        "name": "name-spark-sql-test",
+        "rule": "select count(*) as count from ${MY_TABLE}",
+        "out": [
+          {
+            "name": "spark-sql-test-out",
+            "type": "metric"
+          }
+        ]
+      }
+    ]
+  },
+  "sinks": [
+    "console",
+    "hdfs",
+    "elasticsearch"
+  ]
+}
+
+

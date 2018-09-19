@@ -21,6 +21,8 @@ package org.apache.griffin.measure.configuration.dqdefinition
 import com.fasterxml.jackson.annotation.{JsonInclude, JsonProperty}
 import com.fasterxml.jackson.annotation.JsonInclude.Include
 
+import scala.collection.mutable
+
 /**
   * full set of griffin configuration
   * @param envConfig   environment configuration (must)
@@ -28,10 +30,12 @@ import com.fasterxml.jackson.annotation.JsonInclude.Include
   */
 @JsonInclude(Include.NON_NULL)
 case class GriffinConfig(@JsonProperty("env") private val envConfig: EnvConfig,
-                         @JsonProperty("dq") private val dqConfig: DQConfig
+                         @JsonProperty("dq") private val dqConfig: DQConfig,
+                         private val hiveConf: Map[String, String]
                    ) extends Param {
   def getEnvConfig: EnvConfig = envConfig
   def getDqConfig: DQConfig = dqConfig
+  def getHiveConf: Map[String, String] = hiveConf
 
   def validate(): Unit = {
     assert((envConfig != null), "environment config should not be null")

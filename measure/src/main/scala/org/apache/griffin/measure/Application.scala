@@ -20,11 +20,13 @@ package org.apache.griffin.measure
 
 import org.apache.griffin.measure.configuration.enums._
 import org.apache.griffin.measure.configuration.dqdefinition.reader.ParamReaderFactory
-import org.apache.griffin.measure.configuration.dqdefinition.{GriffinConfig, DQConfig, EnvConfig, Param}
+import org.apache.griffin.measure.configuration.dqdefinition.{DQConfig, EnvConfig, GriffinConfig, Param}
 import org.apache.griffin.measure.launch.DQApp
 import org.apache.griffin.measure.launch.batch.BatchDQApp
 import org.apache.griffin.measure.launch.streaming.StreamingDQApp
 
+import scala.collection.convert.Wrappers.MutableMapWrapper
+import scala.io.Source
 import scala.reflect.ClassTag
 import scala.util.{Failure, Success, Try}
 
@@ -34,14 +36,22 @@ import scala.util.{Failure, Success, Try}
 object Application extends Loggable {
 
   def main(args: Array[String]): Unit = {
+    doMain(args)
+  }
+
+  def doMain(args: Array[String]) = {
     info(args.toString)
     if (args.length < 2) {
-      error("Usage: class <env-param> <dq-param>")
+      error("Usage: class <env-param> <dq-param> [<hiveconf-param>]")
       sys.exit(-1)
     }
 
     val envParamFile = args(0)
     val dqParamFile = args(1)
+    val hiveConfFileOpt = if (args.length > 2)
+      Option(args(2))
+    else
+      None
 
     info(envParamFile)
     info(dqParamFile)
@@ -61,7 +71,9 @@ object Application extends Loggable {
         sys.exit(-2)
       }
     }
-    val allParam: GriffinConfig = GriffinConfig(envParam, dqParam)
+    val hiveConfMap = readHiveConf(hiveConfFileOpt) // TODO system.exit(-2)
+
+    val allParam: GriffinConfig = GriffinConfig(envParam, dqParam, hiveConfMap)
 
     // choose process
     val procType = ProcessType(allParam.getDqConfig.getProcType)
@@ -120,7 +132,24 @@ object Application extends Loggable {
     shutdown
   }
 
-  private def readParamFile[T <: Param](file: String)(implicit m : ClassTag[T]): Try[T] = {
+  private def readHiveConf(hiveConfFileOpt: Option[String]) = {
+
+    val map = scala.collection.mutable.Map[String, String]()
+    if (hiveConfFileOpt.isDefined) {
+      for (line <- Source.fromFile(hiveConfFileOpt.get).getLines) {
+        val keyVal = line.split("=")
+        if (keyVal.length != 2) {
+          throw new IllegalArgumentException(s"Wrong config line at hiveconf properties file [filePath: $hiveConfFileOpt.get, line: $line]")
+        }
+
+        map(keyVal(0)) = keyVal(1)
+      }
+    }
+    Map(map.toList: _*)
+
+  }
+
+  private def readParamFile[T <: Param](file: String)(implicit m: ClassTag[T]): Try[T] = {
     val paramReader = ParamReaderFactory.getParamReader(file)
     paramReader.readConfig[T]
   }

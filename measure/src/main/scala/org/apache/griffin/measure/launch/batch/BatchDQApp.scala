@@ -60,6 +60,12 @@ case class BatchDQApp(allParam: GriffinConfig) extends DQApp {
 
     // register udf
     GriffinUDFAgent.register(sqlContext)
+
+    for {(key, value) <- allParam.getHiveConf} {
+      val setKeyValue = s"SET $key=$value"
+      info(s"HiveConf: $setKeyValue")
+      sparkSession.sql(setKeyValue)
+    }
   }
 
   def run: Try[_] = Try {

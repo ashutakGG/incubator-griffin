@@ -148,12 +148,12 @@ case class EvaluateRuleParam( @JsonProperty("rules") private val rules: List[Rul
 @JsonInclude(Include.NON_NULL)
 case class RuleParam(@JsonProperty("dsl.type") private val dslType: String,
                      @JsonProperty("dq.type") private val dqType: String,
-                     @JsonProperty("in.dataframe.name") private val inDfName: String,
-                     @JsonProperty("out.dataframe.name") private val outDfName: String,
-                     @JsonProperty("rule") private val rule: String,
-                     @JsonProperty("details") private val details: Map[String, Any],
-                     @JsonProperty("cache") private val cache: Boolean,
-                     @JsonProperty("out") private val outputs: List[RuleOutputParam]
+                     @JsonProperty("in.dataframe.name") private val inDfName: String = null,
+                     @JsonProperty("out.dataframe.name") private val outDfName: String = null,
+                     @JsonProperty("rule") private val rule: String = null,
+                     @JsonProperty("details") private val details: Map[String, Any] = null,
+                     @JsonProperty("cache") private val cache: Boolean = false,
+                     @JsonProperty("out") private val outputs: List[RuleOutputParam] = null
                     ) extends Param {
   def getDslType: DslType = if (dslType != null) DslType(dslType) else DslType("")
   def getDqType: DqType = if (dqType != null) DqType(dqType) else DqType("")

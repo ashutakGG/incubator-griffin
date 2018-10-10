@@ -31,7 +31,7 @@ import org.apache.griffin.measure.launch.batch.BatchDQApp
 import org.apache.griffin.measure.step.builder.dsl.parser.GriffinDslParser
 import org.apache.griffin.measure.step.builder.dsl.transform.AccuracyExpr2DQSteps
 import org.apache.spark.SparkConf
-import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.scalatest._
 
 import scala.util.Try
@@ -40,22 +40,12 @@ case class AccuracyResult(total: Long, miss: Long, matched: Long)
 
 class MyTransformStepTest extends FlatSpec with Matchers with DataFrameSuiteBase {
   import spark.implicits._
-//
-//  val personConnector = dataConnectorParam(tableName = "person")
-//  val personConnector2 = dataConnectorParam(tableName = "person2")
-//
-  private val envParam = EnvConfig(
-    sparkParam = emptySparkParam,
-    sinkParams = List(SinkParam(sinkType = "console", config = Map())),
-    checkpointParams = List()
-  )
 
   override def beforeAll(): Unit = {
     super.beforeAll()
 
-    createPersonsTables
-
-    spark.sql("SELECT * From person").show()
+    createPersonTable()
+    createEmptyPersonTable()
 
     spark.conf.set("spark.sql.crossJoin.enabled", "true")
   }
@@ -78,22 +68,10 @@ class MyTransformStepTest extends FlatSpec with Matchers with DataFrameSuiteBase
       dslType = "griffin-dsl",
       dqType = "ACCURACY",
       outDfName = "person_accuracy",
-      rule = "source.name=target.name",
-      outputs = List(RuleOutputParam(name = "spark-sql-test-out", outputType = "metric", flatten = "")),
-      inDfName = "",
-      details = Map(),
-      cache = false
+      rule = "source.name = target.name"
     )
 
-    val dqJob = DQJobBuilder.buildDQJob(
-      dqContext,
-      evaluateRuleParam = EvaluateRuleParam(List(accuracyRule))
-    )
-
-    dqJob.execute(dqContext)
-
-    val res = spark
-      .sql(s"select * from ${accuracyRule.getOutDfName()}")
+    val res = getRuleResults(dqContext, accuracyRule)
       .as[AccuracyResult]
       .collect()
 
@@ -102,7 +80,18 @@ class MyTransformStepTest extends FlatSpec with Matchers with DataFrameSuiteBase
     res(0) shouldEqual AccuracyResult(2, 0, 2)
   }
 
-  private def createPersonsTables = {
+  private def getRuleResults(dqContext: DQContext, rule: RuleParam): DataFrame = {
+    val dqJob = DQJobBuilder.buildDQJob(
+      dqContext,
+      evaluateRuleParam = EvaluateRuleParam(List(rule))
+    )
+
+    dqJob.execute(dqContext)
+
+    spark.sql(s"select * from ${rule.getOutDfName()}")
+  }
+
+  private def createPersonTable() = {
     val personCsvPath = getClass.getResource("/myconf/hive/person_table.csv").getFile
 
     // Table 'person'
@@ -118,9 +107,8 @@ class MyTransformStepTest extends FlatSpec with Matchers with DataFrameSuiteBase
 
     spark.sql(s"LOAD DATA LOCAL INPATH '$personCsvPath' OVERWRITE INTO TABLE person")
 
-    // Table 'person2'
     spark.sql(
-      "CREATE TABLE IF NOT EXISTS person2 " +
+      "CREATE TABLE IF NOT EXISTS empty_person " +
         "( " +
         "  name String," +
         "  age int " +
@@ -128,27 +116,24 @@ class MyTransformStepTest extends FlatSpec with Matchers with DataFrameSuiteBase
         "ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' LINES TERMINATED BY '\n' " +
         "STORED AS TEXTFILE"
     )
-
-    //    spark.sql(s"LOAD DATA LOCAL INPATH '$personCsvPath' OVERWRITE INTO TABLE person2")
   }
 
-  private lazy val emptySparkParam = {
-    SparkParam(
-      logLevel = "",
-      cpDir = "",
-      batchInterval = "",
-      processInterval = "",
-      config = Map(),
-      initClear = false
+  private def createEmptyPersonTable() = {
+    spark.sql(
+      "CREATE TABLE IF NOT EXISTS empty_person " +
+        "( " +
+        "  name String," +
+        "  age int " +
+        ") " +
+        "ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' LINES TERMINATED BY '\n' " +
+        "STORED AS TEXTFILE"
     )
   }
 
   private def getDqContext(dataSourcesParam: Seq[DataSourceParam], name: String = "test-context"): DQContext = {
-    // get data sources
     val dataSources = DataSourceFactory.getDataSources(spark, null, dataSourcesParam)
-    dataSources.foreach(_.init)
+    dataSources.foreach(_.init())
 
-    // create dq context
     DQContext(
       ContextId(System.currentTimeMillis),
       name,

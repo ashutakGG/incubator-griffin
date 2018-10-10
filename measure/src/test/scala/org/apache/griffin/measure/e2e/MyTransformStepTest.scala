@@ -40,58 +40,10 @@ case class AccuracyResult(total: Long, miss: Long, matched: Long)
 
 class MyTransformStepTest extends FlatSpec with Matchers with DataFrameSuiteBase {
   import spark.implicits._
-
-  val personConnector = DataConnectorParam(
-    conType = "HIVE",
-    version = "1.2",
-    dataFrameName = null,
-    config = Map("table.name" -> "person"),
-    preProc = List()
-  )
-  val personConnector2 = DataConnectorParam(
-    conType = "HIVE",
-    version = "1.2",
-    dataFrameName = null,
-    config = Map("table.name" -> "person"),
-    preProc = List()
-  )
-  //  val dqParam = DQConfig(
-  //    name = "dqParamMain",
-  //    timestamp = 11111L,
-  //    procType = "",
-  //    dataSources = List(
-  //      DataSourceParam(
-  //        name = "source",
-  //        baseline = false,
-  //        connectors = List(personConnector),
-  //        checkpoint = Map()
-  //      ),
-  //      DataSourceParam(
-  //        name = "target",
-  //        baseline = false,
-  //        connectors = List(personConnector2),
-  //        checkpoint = Map()
-  //      )
-  //    ),
-  //    evaluateRule = EvaluateRuleParam(List(
-  //      RuleParam(
-  //        dslType = "griffin-dsl",
-  //        dqType = "ACCURACY",
-  //        outDfName = "person_accuracy",
-  //        rule = "source.name=target.name",
-  //        outputs = List(RuleOutputParam(name = "spark-sql-test-out", outputType = "metric", flatten = "")),
-  //        inDfName = "",
-  //        details = Map(),
-  //        cache = false
-  //      )
-  //    )),
-  //    sinks = List(
-  //      "console",
-  //      "hdfs",
-  //      "elasticsearch"
-  //    )
-  //  )
-
+//
+//  val personConnector = dataConnectorParam(tableName = "person")
+//  val personConnector2 = dataConnectorParam(tableName = "person2")
+//
   private val envParam = EnvConfig(
     sparkParam = emptySparkParam,
     sinkParams = List(SinkParam(sinkType = "console", config = Map())),
@@ -111,21 +63,16 @@ class MyTransformStepTest extends FlatSpec with Matchers with DataFrameSuiteBase
 
   "accuracy" should "provide matchedFraction" in {
     val dqContext: DQContext = getDqContext(
-      name = "test-context",
       dataSourcesParam = List(
         DataSourceParam(
           name = "source",
-          connectors = List(personConnector)
+          connectors = List(dataConnectorParam(tableName = "person"))
         ),
         DataSourceParam(
           name = "target",
-          connectors = List(personConnector2)
+          connectors = List(dataConnectorParam(tableName = "person"))
         )
       ))
-
-    // start id
-    val applicationId = spark.sparkContext.applicationId
-    dqContext.getSink().start(applicationId)
 
     val accuracyRule = RuleParam(
       dslType = "griffin-dsl",
@@ -196,7 +143,7 @@ class MyTransformStepTest extends FlatSpec with Matchers with DataFrameSuiteBase
     )
   }
 
-  private def getDqContext(name: String, dataSourcesParam: Seq[DataSourceParam]): DQContext = {
+  private def getDqContext(dataSourcesParam: Seq[DataSourceParam], name: String = "test-context"): DQContext = {
     // get data sources
     val dataSources = DataSourceFactory.getDataSources(spark, null, dataSourcesParam)
     dataSources.foreach(_.init)
@@ -207,8 +154,18 @@ class MyTransformStepTest extends FlatSpec with Matchers with DataFrameSuiteBase
       name,
       dataSources,
       Nil,
-      BatchProcessType,
+      BatchProcessType
     )(spark)
+  }
+
+  private def dataConnectorParam(tableName: String) = {
+    DataConnectorParam(
+      conType = "HIVE",
+      version = null,
+      dataFrameName = null,
+      config = Map("table.name" -> tableName),
+      preProc = null
+    )
   }
 }
 

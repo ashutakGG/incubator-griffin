@@ -36,7 +36,11 @@ import org.scalatest._
 
 import scala.util.Try
 
+case class AccuracyResult(total: Long, miss: Long, matched: Long)
+
 class MyTransformStepTest extends FlatSpec with Matchers with DataFrameSuiteBase {
+  import spark.implicits._
+
   val personConnector = DataConnectorParam(
     conType = "HIVE",
     version = "1.2",
@@ -106,8 +110,18 @@ class MyTransformStepTest extends FlatSpec with Matchers with DataFrameSuiteBase
 
 
   "accuracy" should "provide matchedFraction" in {
-//    AccuracyExpr2DQSteps(getDqContext, expr = Expr(), ruleParam = RuleParam)
-    val dqContext: DQContext = getDqContext
+    val dqContext: DQContext = getDqContext(
+      name = "test-context",
+      dataSourcesParam = List(
+        DataSourceParam(
+          name = "source",
+          connectors = List(personConnector)
+        ),
+        DataSourceParam(
+          name = "target",
+          connectors = List(personConnector2)
+        )
+      ))
 
     // start id
     val applicationId = spark.sparkContext.applicationId
@@ -128,10 +142,26 @@ class MyTransformStepTest extends FlatSpec with Matchers with DataFrameSuiteBase
 
     print(s">>>>> ctx: $dqContext")
 
-    spark.sql(s"select * from ${dqParam.getEvaluateRule.getRules(0).getOutDfName()}").show()
-//
-//    println(s">>>>> ${dqJob.dqSteps.size}")
-//    println(s">>>>> ${dqJob.dqSteps}")
+    val res = spark
+      .sql(s"select * from ${dqParam.getEvaluateRule.getRules(0).getOutDfName()}")
+      .as[AccuracyResult]
+      .collect()
+
+    res.length shouldBe 1
+
+    res(0) shouldEqual AccuracyResult(2, 0, 2)
+  }
+
+  private def dataSourceParam(name: String,
+                              connectors: List[DataConnectorParam],
+                              baseline: Boolean = false,
+                              checkpoint: Map[String, Any] = Map()) = {
+    DataSourceParam(
+      name = name,
+      connectors = connectors,
+      baseline = false,
+      checkpoint = Map()
+    )
   }
 
 
@@ -162,7 +192,7 @@ class MyTransformStepTest extends FlatSpec with Matchers with DataFrameSuiteBase
         "STORED AS TEXTFILE"
     )
 
-//    spark.sql(s"LOAD DATA LOCAL INPATH '$personCsvPath' OVERWRITE INTO TABLE person2")
+    //    spark.sql(s"LOAD DATA LOCAL INPATH '$personCsvPath' OVERWRITE INTO TABLE person2")
   }
 
   private lazy val emptySparkParam = {
@@ -176,35 +206,15 @@ class MyTransformStepTest extends FlatSpec with Matchers with DataFrameSuiteBase
     )
   }
 
-  def run: Try[_] = Try {
-    val dqContext: DQContext = getDqContext
-
-    // start id
-    val applicationId = spark.sparkContext.applicationId
-    dqContext.getSink().start(applicationId)
-
-    // build job
-    val dqJob = DQJobBuilder.buildDQJob(dqContext, dqParam.getEvaluateRule)
-
-    // dq job execute
-    dqJob.execute(dqContext)
-
-    // clean context
-    dqContext.clean()
-
-    // finish
-    dqContext.getSink().finish()
-  }
-
-  private def getDqContext = {
+  private def getDqContext(name: String, dataSourcesParam: Seq[DataSourceParam]): DQContext = {
     // get data sources
-    val dataSources = DataSourceFactory.getDataSources(spark, null, dqParam.getDataSources)
+    val dataSources = DataSourceFactory.getDataSources(spark, null, dataSourcesParam)
     dataSources.foreach(_.init)
 
     // create dq context
     val dqContext: DQContext = DQContext(
       ContextId(System.currentTimeMillis),
-      dqParam.getName,
+      name,
       dataSources,
       getSinkParams,
       BatchProcessType
@@ -212,6 +222,7 @@ class MyTransformStepTest extends FlatSpec with Matchers with DataFrameSuiteBase
     dqContext
   }
 
+  // TODO
   private def getSinkParams: Seq[SinkParam] = {
     val validSinkTypes = dqParam.getValidSinkTypes
     envParam.getSinkParams.flatMap { sinkParam =>

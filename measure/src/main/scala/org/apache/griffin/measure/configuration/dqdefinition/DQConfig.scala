@@ -74,9 +74,9 @@ case class DQConfig(@JsonProperty("name") private val name: String,
   */
 @JsonInclude(Include.NON_NULL)
 case class DataSourceParam( @JsonProperty("name") private val name: String,
-                            @JsonProperty("baseline") private val baseline: Boolean,
                             @JsonProperty("connectors") private val connectors: List[DataConnectorParam],
-                            @JsonProperty("checkpoint") private val checkpoint: Map[String, Any]
+                            @JsonProperty("baseline") private val baseline: Boolean = false,
+                            @JsonProperty("checkpoint") private val checkpoint: Map[String, Any] = null
                           ) extends Param {
   def getName: String = name
   def isBaseline: Boolean = if (!baseline.equals(null)) baseline else false

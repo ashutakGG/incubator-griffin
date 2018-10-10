@@ -44,6 +44,7 @@ case class AccuracyExpr2DQSteps(context: DQContext,
     val _miss = "miss"
     val _total = "total"
     val _matched = "matched"
+    val _matchedFraction = "matchedFraction"
   }
   import AccuracyKeys._
 
@@ -125,14 +126,26 @@ case class AccuracyExpr2DQSteps(context: DQContext,
       // 4. accuracy metric
       val accuracyTableName = ruleParam.getOutDfName()
       val matchedColName = details.getStringOrKey(_matched)
+      val matchedFractionColName = details.getStringOrKey(_matchedFraction)
       val accuracyMetricSql = procType match {
         case BatchProcessType =>
           s"""
-             |SELECT `${totalCountTableName}`.`${totalColName}` AS `${totalColName}`,
-             |coalesce(`${missCountTableName}`.`${missColName}`, 0) AS `${missColName}`,
-             |(`${totalCountTableName}`.`${totalColName}` - coalesce(`${missCountTableName}`.`${missColName}`, 0)) AS `${matchedColName}`
-             |FROM `${totalCountTableName}` LEFT JOIN `${missCountTableName}`
-         """.stripMargin
+             SELECT `${totalColName}`,
+                    `${missColName}`,
+                    `${matchedColName}`,
+                    coalesce(`${matchedColName}` / `${totalColName}`, 1.0) AS `${matchedFractionColName}`
+
+             FROM (
+               SELECT `${totalColName}`,
+                      `${missColName}`,
+                      (`${totalColName}` - `${missColName}`) AS `${matchedColName}`
+               FROM (
+                 SELECT `${totalCountTableName}`.`${totalColName}` AS `${totalColName}`,
+                        coalesce(`${missCountTableName}`.`${missColName}`, 0) AS `${missColName}`
+                 FROM `${totalCountTableName}` LEFT JOIN `${missCountTableName}`
+               )
+             )
+         """
         case StreamingProcessType =>
           s"""
              |SELECT `${totalCountTableName}`.`${ConstantColumns.tmst}` AS `${ConstantColumns.tmst}`,

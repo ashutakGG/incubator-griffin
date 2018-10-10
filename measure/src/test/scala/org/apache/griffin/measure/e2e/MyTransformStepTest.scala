@@ -105,7 +105,7 @@ class MyTransformStepTest extends FlatSpec with Matchers with DataFrameSuiteBase
   }
 
   private def createPersonTable(): Unit = {
-    val personCsvPath = getClass.getResource("/myconf/hive/person_table.csv").getFile
+    val personCsvPath = getClass.getResource("/hive/person_table.csv").getFile
 
     spark.sql(
       s"CREATE TABLE IF NOT EXISTS ${PERSON_TABLE} " +

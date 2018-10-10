@@ -123,7 +123,7 @@ class MyTest extends FlatSpec with Matchers with DataFrameSuiteBase {
   }
 
   private def createPersonsTables = {
-    val personCsvPath = getClass.getResource("/myconf/hive/person_table.csv").getFile
+    val personCsvPath = getClass.getResource("/hive/person_table.csv").getFile
 
     // Table 'person'
     spark.sql(

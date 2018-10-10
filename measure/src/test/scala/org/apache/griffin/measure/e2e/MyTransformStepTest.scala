@@ -18,28 +18,23 @@ under the License.
 */
 package org.apache.griffin.measure.e2e
 
-import java.util.Date
-
 import com.holdenkarau.spark.testing.DataFrameSuiteBase
-import org.apache.griffin.measure.Application
+import org.apache.spark.sql.DataFrame
+import org.scalatest._
+
 import org.apache.griffin.measure.configuration.dqdefinition._
 import org.apache.griffin.measure.configuration.enums.BatchProcessType
 import org.apache.griffin.measure.context.{ContextId, DQContext}
 import org.apache.griffin.measure.datasource.DataSourceFactory
 import org.apache.griffin.measure.job.builder.DQJobBuilder
-import org.apache.griffin.measure.launch.batch.BatchDQApp
-import org.apache.griffin.measure.step.builder.dsl.parser.GriffinDslParser
-import org.apache.griffin.measure.step.builder.dsl.transform.AccuracyExpr2DQSteps
-import org.apache.spark.SparkConf
-import org.apache.spark.sql.{DataFrame, SparkSession}
-import org.scalatest._
-
-import scala.util.Try
 
 case class AccuracyResult(total: Long, miss: Long, matched: Long)
 
 class MyTransformStepTest extends FlatSpec with Matchers with DataFrameSuiteBase {
   import spark.implicits._
+
+  private val EMPTY_PERSON_TABLE = "empty_person"
+  private val PERSON_TABLE = "person"
 
   override def beforeAll(): Unit = {
     super.beforeAll()
@@ -50,17 +45,35 @@ class MyTransformStepTest extends FlatSpec with Matchers with DataFrameSuiteBase
     spark.conf.set("spark.sql.crossJoin.enabled", "true")
   }
 
+  "accuracy" should "basically work" in {
+    checkAccuracy(sourceName = PERSON_TABLE, targetName = PERSON_TABLE, expectedResult = AccuracyResult(2, 0, 2))
+  }
 
-  "accuracy" should "provide matchedFraction" in {
+  "accuracy" should "work with empty target" in {
+    checkAccuracy(sourceName = PERSON_TABLE, targetName = EMPTY_PERSON_TABLE, expectedResult = AccuracyResult(2, 2, 0))
+  }
+
+  "accuracy" should "work with empty source" in {
+    checkAccuracy(sourceName = EMPTY_PERSON_TABLE, targetName = PERSON_TABLE, expectedResult = AccuracyResult(0, 0, 0))
+  }
+
+  "accuracy" should "work with empty source and target" in {
+    checkAccuracy(
+      sourceName = EMPTY_PERSON_TABLE,
+      targetName = EMPTY_PERSON_TABLE,
+      expectedResult = AccuracyResult(0, 0, 0))
+  }
+
+  private def checkAccuracy(sourceName: String, targetName: String, expectedResult: AccuracyResult) = {
     val dqContext: DQContext = getDqContext(
       dataSourcesParam = List(
         DataSourceParam(
           name = "source",
-          connectors = List(dataConnectorParam(tableName = "person"))
+          connectors = List(dataConnectorParam(tableName = sourceName))
         ),
         DataSourceParam(
           name = "target",
-          connectors = List(dataConnectorParam(tableName = "person"))
+          connectors = List(dataConnectorParam(tableName = targetName))
         )
       ))
 
@@ -77,7 +90,7 @@ class MyTransformStepTest extends FlatSpec with Matchers with DataFrameSuiteBase
 
     res.length shouldBe 1
 
-    res(0) shouldEqual AccuracyResult(2, 0, 2)
+    res(0) shouldEqual expectedResult
   }
 
   private def getRuleResults(dqContext: DQContext, rule: RuleParam): DataFrame = {
@@ -91,12 +104,11 @@ class MyTransformStepTest extends FlatSpec with Matchers with DataFrameSuiteBase
     spark.sql(s"select * from ${rule.getOutDfName()}")
   }
 
-  private def createPersonTable() = {
+  private def createPersonTable(): Unit = {
     val personCsvPath = getClass.getResource("/myconf/hive/person_table.csv").getFile
 
-    // Table 'person'
     spark.sql(
-      "CREATE TABLE IF NOT EXISTS person " +
+      s"CREATE TABLE IF NOT EXISTS ${PERSON_TABLE} " +
         "( " +
         "  name String," +
         "  age int " +
@@ -105,22 +117,12 @@ class MyTransformStepTest extends FlatSpec with Matchers with DataFrameSuiteBase
         "STORED AS TEXTFILE"
     )
 
-    spark.sql(s"LOAD DATA LOCAL INPATH '$personCsvPath' OVERWRITE INTO TABLE person")
-
-    spark.sql(
-      "CREATE TABLE IF NOT EXISTS empty_person " +
-        "( " +
-        "  name String," +
-        "  age int " +
-        ") " +
-        "ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' LINES TERMINATED BY '\n' " +
-        "STORED AS TEXTFILE"
-    )
+    spark.sql(s"LOAD DATA LOCAL INPATH '$personCsvPath' OVERWRITE INTO TABLE ${PERSON_TABLE}")
   }
 
-  private def createEmptyPersonTable() = {
+  private def createEmptyPersonTable(): Unit = {
     spark.sql(
-      "CREATE TABLE IF NOT EXISTS empty_person " +
+      s"CREATE TABLE IF NOT EXISTS ${EMPTY_PERSON_TABLE} " +
         "( " +
         "  name String," +
         "  age int " +
@@ -128,6 +130,8 @@ class MyTransformStepTest extends FlatSpec with Matchers with DataFrameSuiteBase
         "ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' LINES TERMINATED BY '\n' " +
         "STORED AS TEXTFILE"
     )
+
+    spark.sql(s"select * from ${EMPTY_PERSON_TABLE}").show()
   }
 
   private def getDqContext(dataSourcesParam: Seq[DataSourceParam], name: String = "test-context"): DQContext = {
@@ -153,30 +157,3 @@ class MyTransformStepTest extends FlatSpec with Matchers with DataFrameSuiteBase
     )
   }
 }
-
-
-//
-//List(
-//  SeqDQStep(
-//    List(
-//      SparkSqlTransformStep(__missRecords,SELECT `source`.* FROM `source` LEFT JOIN `target` ON coalesce(`source`.`name`, '') = coalesce(`target`.`name`, '') WHERE (NOT (`source`.`name` IS NULL)) AND (`target`.`name` IS NULL),Map(),true),
-//      SparkSqlTransformStep(__missCount,SELECT COUNT(*) AS `miss` FROM `__missRecords`,Map(),false), SparkSqlTransformStep(__totalCount,SELECT COUNT(*) AS `total` FROM `source`,Map(),false),
-//      SparkSqlTransformStep(
-//        person_accuracy,
-//        SELECT `total`,
-//        `miss`,
-//        (`total` - `miss`) AS `matched`,
-//        ((`__totalCount`.`total` - coalesce(`__missCount`.`miss`, 0)) / `__totalCount`.`total` ) AS `matchedFraction`
-//        FROM (
-//        SELECT `__totalCount`.`total` AS `total`,
-//        coalesce(`__missCount`.`miss`, 0) AS `miss`
-//        FROM `__totalCount` LEFT JOIN `__missCount`
-//        )
-//        ,Map(),false
-//      ),
-//      MetricWriteStep(spark-sql-test-out,person_accuracy,DefaultFlattenType,None),
-//      RecordWriteStep(__missRecords,__missRecords,None,None)
-//    )
-//  ),
-//  MetricFlushStep()
-//)

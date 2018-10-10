@@ -16,7 +16,7 @@ KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations
 under the License.
 */
-package org.apache.griffin.measure.e2e
+package org.apache.griffin.measure.transformations
 
 import com.holdenkarau.spark.testing.DataFrameSuiteBase
 import org.apache.spark.sql.DataFrame
@@ -30,7 +30,7 @@ import org.apache.griffin.measure.job.builder.DQJobBuilder
 
 case class AccuracyResult(total: Long, miss: Long, matched: Long)
 
-class MyTransformStepTest extends FlatSpec with Matchers with DataFrameSuiteBase {
+class AccuracyTransformationsIntegrationTest extends FlatSpec with Matchers with DataFrameSuiteBase {
   import spark.implicits._
 
   private val EMPTY_PERSON_TABLE = "empty_person"

@@ -55,42 +55,42 @@ class MyTransformStepTest extends FlatSpec with Matchers with DataFrameSuiteBase
     config = Map("table.name" -> "person"),
     preProc = List()
   )
-  val dqParam = DQConfig(
-    name = "dqParamMain",
-    timestamp = 11111L,
-    procType = "",
-    dataSources = List(
-      DataSourceParam(
-        name = "source",
-        baseline = false,
-        connectors = List(personConnector),
-        checkpoint = Map()
-      ),
-      DataSourceParam(
-        name = "target",
-        baseline = false,
-        connectors = List(personConnector2),
-        checkpoint = Map()
-      )
-    ),
-    evaluateRule = EvaluateRuleParam(List(
-      RuleParam(
-        dslType = "griffin-dsl",
-        dqType = "ACCURACY",
-        outDfName = "person_accuracy",
-        rule = "source.name=target.name",
-        outputs = List(RuleOutputParam(name = "spark-sql-test-out", outputType = "metric", flatten = "")),
-        inDfName = "",
-        details = Map(),
-        cache = false
-      )
-    )),
-    sinks = List(
-      "console",
-      "hdfs",
-      "elasticsearch"
-    )
-  )
+  //  val dqParam = DQConfig(
+  //    name = "dqParamMain",
+  //    timestamp = 11111L,
+  //    procType = "",
+  //    dataSources = List(
+  //      DataSourceParam(
+  //        name = "source",
+  //        baseline = false,
+  //        connectors = List(personConnector),
+  //        checkpoint = Map()
+  //      ),
+  //      DataSourceParam(
+  //        name = "target",
+  //        baseline = false,
+  //        connectors = List(personConnector2),
+  //        checkpoint = Map()
+  //      )
+  //    ),
+  //    evaluateRule = EvaluateRuleParam(List(
+  //      RuleParam(
+  //        dslType = "griffin-dsl",
+  //        dqType = "ACCURACY",
+  //        outDfName = "person_accuracy",
+  //        rule = "source.name=target.name",
+  //        outputs = List(RuleOutputParam(name = "spark-sql-test-out", outputType = "metric", flatten = "")),
+  //        inDfName = "",
+  //        details = Map(),
+  //        cache = false
+  //      )
+  //    )),
+  //    sinks = List(
+  //      "console",
+  //      "hdfs",
+  //      "elasticsearch"
+  //    )
+  //  )
 
   private val envParam = EnvConfig(
     sparkParam = emptySparkParam,
@@ -127,23 +127,26 @@ class MyTransformStepTest extends FlatSpec with Matchers with DataFrameSuiteBase
     val applicationId = spark.sparkContext.applicationId
     dqContext.getSink().start(applicationId)
 
-    // build job
-    val dqJob = DQJobBuilder.buildDQJob(dqContext, dqParam.getEvaluateRule)
+    val accuracyRule = RuleParam(
+      dslType = "griffin-dsl",
+      dqType = "ACCURACY",
+      outDfName = "person_accuracy",
+      rule = "source.name=target.name",
+      outputs = List(RuleOutputParam(name = "spark-sql-test-out", outputType = "metric", flatten = "")),
+      inDfName = "",
+      details = Map(),
+      cache = false
+    )
+
+    val dqJob = DQJobBuilder.buildDQJob(
+      dqContext,
+      evaluateRuleParam = EvaluateRuleParam(List(accuracyRule))
+    )
 
     dqJob.execute(dqContext)
 
-    for {step <- dqJob.dqSteps} {
-      println(s">>>>> step: $step")
-      step.execute(dqContext)
-
-      println("spark.sql(\"select * from person_accuracy\").show()")
-
-    }
-
-    print(s">>>>> ctx: $dqContext")
-
     val res = spark
-      .sql(s"select * from ${dqParam.getEvaluateRule.getRules(0).getOutDfName()}")
+      .sql(s"select * from ${accuracyRule.getOutDfName()}")
       .as[AccuracyResult]
       .collect()
 
@@ -151,19 +154,6 @@ class MyTransformStepTest extends FlatSpec with Matchers with DataFrameSuiteBase
 
     res(0) shouldEqual AccuracyResult(2, 0, 2)
   }
-
-  private def dataSourceParam(name: String,
-                              connectors: List[DataConnectorParam],
-                              baseline: Boolean = false,
-                              checkpoint: Map[String, Any] = Map()) = {
-    DataSourceParam(
-      name = name,
-      connectors = connectors,
-      baseline = false,
-      checkpoint = Map()
-    )
-  }
-
 
   private def createPersonsTables = {
     val personCsvPath = getClass.getResource("/myconf/hive/person_table.csv").getFile
@@ -212,24 +202,14 @@ class MyTransformStepTest extends FlatSpec with Matchers with DataFrameSuiteBase
     dataSources.foreach(_.init)
 
     // create dq context
-    val dqContext: DQContext = DQContext(
+    DQContext(
       ContextId(System.currentTimeMillis),
       name,
       dataSources,
-      getSinkParams,
-      BatchProcessType
+      Nil,
+      BatchProcessType,
     )(spark)
-    dqContext
   }
-
-  // TODO
-  private def getSinkParams: Seq[SinkParam] = {
-    val validSinkTypes = dqParam.getValidSinkTypes
-    envParam.getSinkParams.flatMap { sinkParam =>
-      if (validSinkTypes.contains(sinkParam.getType)) Some(sinkParam) else None
-    }
-  }
-
 }
 
 
